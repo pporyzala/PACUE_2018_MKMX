@@ -154,10 +154,10 @@
     <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="uart0.c">
+    <Compile Include="uart.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="uart0.h">
+    <Compile Include="uart.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>

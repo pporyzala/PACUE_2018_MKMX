@@ -4,78 +4,170 @@
 #include <util/crc16.h>
 #include <util/delay.h>
 
-#include "uart0.h"
+#include "uart.h"
 
-#define MAX_PAYLOAD_LENGTH	128
-
-//typedef struct {
-	//uint16_t u16Start;
-	//uint8_t u8DestAddr;
-	//uint8_t u8Cmd;
-	//uint8_t u8Len;
-	//uint8_t u8Payload[MAX_PAYLOAD_LENGTH];
-	//uint8_t u8CRC;
-//
-	//uint8_t u8RawData[MAX_PAYLOAD_LENGTH + 3];
-//} sRxFrame_t;
-
-uint8_t checkcrc(uint8_t *pu8Data, uint8_t u8Len) {
-	uint8_t crc = 0, i;
-	
-	for (i = 0; i < u8Len; i++)
-		crc = _crc8_ccitt_update(crc, pu8Data[i]);
-	
-	return crc;
-}
-
-void SendDebugData(char* str) {
-	uint8_t u8Buff[MAX_PAYLOAD_LENGTH + 6];
-
-	//header:
-	u8Buff[0] = 0x5A;
-	u8Buff[1] = 0xA5;
-
-	//addr
-	u8Buff[2] = 0x00;
-	//cmd
-	u8Buff[3] = 't';
-
-	//payload
-	uint8_t u8PayloadLen = 0;
-	while (*str) {
-		u8Buff[5 + u8PayloadLen] = *str;
-		u8PayloadLen++;
-		str++;
+uint8_t CalcCRC(uint8_t *pu8Data, uint16_t u16Len) {
+	uint8_t u8CRC = 0;
+	for (uint16_t i = 0; i < u16Len; i++) {
+		u8CRC = _crc8_ccitt_update(u8CRC, pu8Data[i]);
 	}
 
-	//payload len
+	return u8CRC;
+}
+
+void SendData(uint8_t u8Addr, uint8_t u8Cmd,
+			  uint8_t *pu8Payload, uint8_t u8PayloadLen) {
+	uint8_t u8Buff[255 + 6];
+	u8Buff[0] = 0x5A;
+	u8Buff[1] = 0xA5;
+	u8Buff[2] = u8Addr;
+	u8Buff[3] = u8Cmd;
 	u8Buff[4] = u8PayloadLen;
-	//crc
-	u8Buff[2 + 3 + u8PayloadLen] = checkcrc(&u8Buff[2], 3 + u8PayloadLen);
+	for (uint8_t i = 0; i < u8PayloadLen; i++) {
+		u8Buff[5 + i] = pu8Payload[i];
+	}
+	u8Buff[5 + u8PayloadLen] = CalcCRC(&u8Buff[2], 3 + u8PayloadLen);
 
-	UART0_u8TxData(u8Buff, 2 + 3 + u8PayloadLen + 1);
-
+	uart_putdata(u8Buff, 5 + u8PayloadLen + 1);
 }
 
-uint8_t u8Buff[255 + 6] = { 0x5A, 0xA5, 0x00, 0x74, 0x04,
-							0x31, 0x32, 0x33, 0x34, 0xFF};
-uint8_t u8Len = 10;
+void SendText(uint8_t u8Addr, char *pcStr) {
+	uint8_t u8Buff[255 + 6];
+	u8Buff[0] = 0x5A;
+	u8Buff[1] = 0xA5;
+	u8Buff[2] = u8Addr;
+	u8Buff[3] = 't';
 
-void SendData(uint8_t *pu8Data, uint16_t u16Len) {
+	uint8_t u8PayloadLen = 0;
+	while (*pcStr != 0) {
+		u8Buff[5 + u8PayloadLen] = *pcStr;
+	    pcStr++;
+		u8PayloadLen++;
+	}
+
+	u8Buff[4] = u8PayloadLen;
+
+	u8Buff[5 + u8PayloadLen] = CalcCRC(&u8Buff[2], 3 + u8PayloadLen);
+
+	uart_putdata(u8Buff, 5 + u8PayloadLen + 1);
 }
+
+enum {
+	eIdle = 0,
+	eWaitSOF,
+	eAddress,
+	eCmd,
+	ePayloadLen,
+	ePayload,
+	eCRC
+} eProtocolState;
+
+struct {
+	uint8_t u8Addr;
+	uint8_t u8Cmd;
+	uint8_t u8PayloadLen;
+	uint8_t u8Payload[255];
+	uint8_t u8CRC;
+
+	uint8_t u8RawData[3 + 255];
+} sFrame;
 
 int main(void)
 {
-	UART0_vInit(4800, 8, UART0_NO_PARITY, 1);
+	uart_init(UART_BAUD_SELECT(4800, 16000000ul));
 	
 	sei();
 
     /* Replace with your application code */
     while (1) 
     {
-		//UART0_bTxByte('a');
-		SendDebugData("1234");
-		_delay_ms(500);
+		
+		uint16_t u16Word = uart_getc();
+		if ((u16Word & 0xFF00) == 0) {
+			uint8_t u8Byte = u16Word & 0x00FF;
+			uint8_t u8PayloadIdx;
+			uint8_t u8PayloadLen;
+			
+			uart_puts("state przed: ");
+			uart_putc(eProtocolState + '0');
+			uart_puts("\n");
+
+			switch(eProtocolState) {
+				case eIdle:
+					if (u8Byte == 0x5A) {
+						eProtocolState = eWaitSOF;
+					}
+					break;
+
+				case eWaitSOF:
+					if (u8Byte == 0xA5) {
+						eProtocolState = eAddress;
+					} else {
+						eProtocolState = eIdle;
+					}
+					break;
+
+				case eAddress:
+					sFrame.u8Addr = u8Byte;
+					sFrame.u8RawData[0] = u8Byte;
+					eProtocolState = eCmd;
+					break;
+
+				case eCmd:
+					sFrame.u8Cmd = u8Byte;
+					sFrame.u8RawData[1] = u8Byte;
+					eProtocolState = ePayloadLen;
+					break;
+
+				case ePayloadLen:
+					sFrame.u8PayloadLen = u8Byte;
+					sFrame.u8RawData[2] = u8Byte;
+
+					if (u8Byte != 0) {
+						eProtocolState = ePayload;
+
+						u8PayloadIdx = 0;
+						u8PayloadLen = u8Byte;
+					} else {
+						eProtocolState = eCRC;
+					}
+					break;
+
+				case ePayload:
+					sFrame.u8Payload[u8PayloadIdx] = u8Byte;
+					sFrame.u8RawData[3 + u8PayloadIdx] = u8Byte;
+					u8PayloadIdx++;
+					
+					if (u8PayloadIdx == sFrame.u8PayloadLen) {
+						eProtocolState = eCRC;
+					}
+					break;
+
+				case eCRC:
+					sFrame.u8CRC = u8Byte;
+					uint8_t u8CalcCRC = 
+						CalcCRC((uint8_t *)&sFrame, 3 + sFrame.u8PayloadLen);
+					
+					if (u8CalcCRC == sFrame.u8CRC) {
+						uart_puts("do domu!! :-)");
+					} else {
+						uart_puts("zostajemy!! :-(");
+					}
+
+					eProtocolState = eIdle;
+					break;
+			}
+
+			uart_puts("  state po: ");
+			uart_putc(eProtocolState + '0');
+			uart_puts("\n");
+		}
+
+		// char u8Payload[] = "test ;-)";
+		//SendData(0x99, 't', u8Payload, strlen(u8Payload));
+		//SendText(0x99, "test ;-)");
+		//SendDebugData("1234");
+		//_delay_ms(500);
     }
 }
 

@@ -88,8 +88,5 @@ typedef uint8_t bool;
 
 // Constant divide calculation with rounding
 #define DIV(Dividend,Divisor) (((Dividend+((Divisor)>>1))/(Divisor)))
-/**
- *  @}
- */
 
 #endif
