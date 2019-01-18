@@ -4,3 +4,7 @@ MCU/usart_tests/Debug/
 MCU/usart_tests/\.vs/
 
 *.xml
+
+PC/build-MKMX_TestApp-Desktop_Qt_5_11_1_MSVC2015-Debug/
+
+PC/build-MKMX_TestApp-Desktop_Qt_5_11_1_MSVC2015-Release/
