@@ -41,6 +41,8 @@ LICENSE:
 #include <avr/pgmspace.h>
 #include "uart.h"
 
+#define I_WILL_BE_TRANSMITTING		DIR_PORT |= (1 << DIR_PIN)
+#define I_WILL_BE_RECEIVING			DIR_PORT &= ~(1 << DIR_PIN)
 
 /*
  *  constants and macros
@@ -218,11 +220,13 @@ LICENSE:
  /* ATmega with one USART */
  #define UART0_RECEIVE_INTERRUPT   USART_RX_vect
  #define UART0_TRANSMIT_INTERRUPT  USART_UDRE_vect
+ #define UART0_TRANSMIT_ENDED	   USART_TX_vect
  #define UART0_STATUS      UCSR0A
  #define UART0_CONTROL     UCSR0B
  #define UART0_CONTROLC    UCSR0C
  #define UART0_DATA        UDR0
  #define UART0_UDRIE       UDRIE0
+ #define UART0_TXCIE       TXCIE0
  #define UART0_UBRRL       UBRR0L
  #define UART0_UBRRH       UBRR0H
  #define UART0_BIT_U2X     U2X0
@@ -410,19 +414,25 @@ Purpose:  called when the UART is ready to transmit the next byte
 {
     unsigned char tmptail;
 
-    
     if ( UART_TxHead != UART_TxTail) {
         /* calculate and store new buffer index */
         tmptail = (UART_TxTail + 1) & UART_TX_BUFFER_MASK;
         UART_TxTail = tmptail;
         /* get one byte from buffer and write it to UART */
         UART0_DATA = UART_TxBuf[tmptail];  /* start transmission */
-    }else{
-        /* tx buffer empty, disable UDRE interrupt */
-        UART0_CONTROL &= ~_BV(UART0_UDRIE);
+    } else {
+	    /* tx buffer empty, disable UDRE interrupt, enable TXC interrupt*/
+		UART0_CONTROL |= _BV(UART0_TXCIE);
+	    UART0_CONTROL &= ~_BV(UART0_UDRIE);
     }
 }
 
+ISR (UART0_TRANSMIT_ENDED)
+{
+	UART0_CONTROL &= ~_BV(UART0_TXCIE);
+
+	I_WILL_BE_RECEIVING;
+}
 
 /*************************************************************************
 Function: uart_init()
@@ -478,6 +488,9 @@ void uart_init(unsigned int baudrate)
     #endif 
     #endif
 
+	DIR_DDR |= (1 << DIR_PIN);
+
+	I_WILL_BE_RECEIVING;
 }/* uart_init */
 
 
@@ -534,7 +547,9 @@ void uart_putc(unsigned char data)
     UART_TxBuf[tmphead] = data;
     UART_TxHead = tmphead;
 
-    /* enable UDRE interrupt */
+	I_WILL_BE_TRANSMITTING;
+    
+	/* enable UDRE interrupt */
     UART0_CONTROL    |= _BV(UART0_UDRIE);
 
 }/* uart_putc */

@@ -9,6 +9,7 @@
 
 
 static uint8_t CalcCRC(uint8_t *pu8Data, uint16_t u16Len);
+static void ParseFrame(void);
 
 enum {
 	eIdle = 0,
@@ -31,21 +32,22 @@ struct {
 } sFrame;
 
 void ProtcolInit(void) {
-	//DIR 
-	
 	uart_init(UART_BAUD_SELECT(4800, 16000000ul));
 }
 
 void ParseData(void) {
 	uint16_t u16Word = uart_getc();
 	if ((u16Word & 0xFF00) == 0) {
+		
 		uint8_t u8Byte = u16Word & 0x00FF;
 		static uint8_t u8PayloadIdx;
 		static uint8_t u8PayloadLen;
 		
-		uart_puts("state przed: ");
-		uart_putc(eProtocolState + '0');
-		uart_puts("\n");
+		uart_putc(u8Byte);
+
+		//uart_puts("state przed: ");
+		//uart_putc(eProtocolState + '0');
+		//uart_puts("\n");
 
 		switch(eProtocolState) {
 			case eIdle:

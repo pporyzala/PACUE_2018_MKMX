@@ -74,6 +74,10 @@ LICENSE:
  */
 #define UART_BAUD_SELECT_DOUBLE_SPEED(baudRate,xtalCpu) ( ((((xtalCpu) + 4UL * (baudRate)) / (8UL * (baudRate)) -1UL)) | 0x8000)
 
+#define DIR_PORT		PORTD
+#define DIR_DDR			DDRD
+#define DIR_PIN			PD2
+
 /** @brief  Size of the circular receive buffer, must be power of 2
  * 
  *  You may need to adapt this constant to your target and your application by adding 
