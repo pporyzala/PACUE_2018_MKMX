@@ -97,9 +97,9 @@ void cEngine::parseFrame(sRxFrame_t *frame) {
 
         emit newDebugVariableText(QString(cText));
     } else {
-        emit incommingDataInterfaceError(trUtf8("Odebrano ramkę z kodem ID o nieoczekiwanej wartości ?! Wartość kodu ID: %1 (hex: %2)... To nie powinno się zdarzyć !")
-                                         .arg(QString::number(frame->u8Cmd),
-                                              QString::number(frame->u8Cmd, 16)));
+//        emit incommingDataInterfaceError(trUtf8("Odebrano ramkę z kodem ID o nieoczekiwanej wartości ?! Wartość kodu ID: %1 (hex: %2)... To nie powinno się zdarzyć !")
+//                                         .arg(QString::number(frame->u8Cmd),
+//                                              QString::number(frame->u8Cmd, 16)));
 
 //        qDebug() << "unknown command: " << u8ToString(frame->u8Cmd) << ", length: " << frame->u16Len;
     }
